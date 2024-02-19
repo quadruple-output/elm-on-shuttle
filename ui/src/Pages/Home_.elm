@@ -22,32 +22,22 @@ page =
 
 
 type alias Model =
-    { greeting : String
-    }
+    { greeting : Maybe (Result Http.Error String) }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( { greeting = "<waiting for server>" }
-    , server_api_get_greeting
+    ( { greeting = Nothing }
+    , server_api_get_greeting { onResponse = ReceivedGreeting }
     )
 
 
-server_api_get_greeting : Cmd Msg
-server_api_get_greeting =
-    Http.get { url = "/api/greet", expect = Http.expectString response_to_rcvd_greeting }
-
-
-response_to_rcvd_greeting : Result Http.Error String -> Msg
-response_to_rcvd_greeting result =
-    ReceivedGreeting
-        (case result of
-            Ok greeting ->
-                greeting
-
-            Err _ ->
-                "<sorry, cannot greet>"
-        )
+server_api_get_greeting : { onResponse : Result Http.Error String -> msg } -> Cmd msg
+server_api_get_greeting params =
+    Http.get
+        { url = "/api/greet"
+        , expect = Http.expectString params.onResponse
+        }
 
 
 
@@ -56,7 +46,7 @@ response_to_rcvd_greeting result =
 
 type Msg
     = NoOp
-    | ReceivedGreeting String
+    | ReceivedGreeting (Result Http.Error String)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -68,7 +58,7 @@ update msg model =
             )
 
         ReceivedGreeting greeting ->
-            ( { model | greeting = greeting }
+            ( { model | greeting = Just greeting }
             , Cmd.none
             )
 
@@ -90,5 +80,19 @@ view : Model -> View Msg
 view model =
     { title = "Elm on Shuttle"
     , attributes = []
-    , element = el [ centerX, centerY ] (text model.greeting)
+    , element =
+        el [ centerX, centerY ] <| show_greeting model.greeting
     }
+
+
+show_greeting : Maybe (Result Http.Error String) -> Element msg
+show_greeting maybe_result_string =
+    case maybe_result_string of
+        Nothing ->
+            text "<wait...>"
+
+        Just (Ok greeting) ->
+            text greeting
+
+        Just (Err _) ->
+            text "<could not get greeting from server>"
