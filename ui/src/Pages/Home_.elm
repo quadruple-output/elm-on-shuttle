@@ -1,18 +1,22 @@
 module Pages.Home_ exposing (Model, Msg, page)
 
+import Effect exposing (Effect)
 import Element exposing (..)
 import Http
+import MyElements
 import Page exposing (Page)
-import Platform.Cmd as Cmd
+import Route exposing (Route)
+import Route.Path exposing (Path)
+import Shared
 import View exposing (View)
 
 
-page : Page Model Msg
-page =
-    Page.element
+page : Shared.Model -> Route () -> Page Model Msg
+page _ _ =
+    Page.new
         { init = init
-        , subscriptions = \_ -> Sub.none
         , update = update
+        , subscriptions = \_ -> Sub.none
         , view = view
         }
 
@@ -24,33 +28,45 @@ type alias Model =
 type Msg
     = NoOp
     | ReceivedGreeting (Result Http.Error String)
+    | Navigate Path
 
 
-init : ( Model, Cmd Msg )
-init =
+init : () -> ( Model, Effect Msg )
+init _ =
     ( { greeting = Nothing }
-    , Http.get
-        { url = "/api/greet"
-        , expect = Http.expectString ReceivedGreeting
-        }
+    , Effect.sendCmd <|
+        Http.get
+            { url = "/api/greet"
+            , expect = Http.expectString ReceivedGreeting
+            }
     )
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
+update : Msg -> Model -> ( Model, Effect Msg )
 update msg model =
     case msg of
         NoOp ->
-            ( model, Cmd.none )
+            ( model, Effect.none )
 
         ReceivedGreeting greeting ->
-            ( { model | greeting = Just greeting }, Cmd.none )
+            ( { model | greeting = Just greeting }, Effect.none )
+
+        Navigate path ->
+            ( model, Effect.pushRoutePath path )
 
 
 view : Model -> View Msg
 view model =
     { title = "Elm on Shuttle"
     , attributes = []
-    , element = el [ centerX, centerY ] <| show_greeting model.greeting
+    , element =
+        el [ centerX, centerY ] <|
+            column []
+                [ show_greeting model.greeting
+                , MyElements.button [ centerX ] "Sign-In" (Navigate Route.Path.SignIn)
+
+                -- , Element.link [] { url = "/sign-in", label = text "Sign-In" }
+                ]
     }
 
 

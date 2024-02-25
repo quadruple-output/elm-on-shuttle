@@ -7,18 +7,16 @@
 module Pages.SignIn exposing (Model, Msg, page)
 
 import Browser exposing (UrlRequest)
-import Browser.Navigation as Navigation
 import Dict exposing (Dict)
 import Effect exposing (Effect)
 import Element exposing (..)
 import Element.Background as Background
-import Element.Border as Border
 import Element.Font as Font
-import Element.Input exposing (button)
 import Element.Region exposing (heading)
 import Http
 import Json.Decode exposing (Value)
 import Json.Encode
+import MyElements as My
 import OAuthMiddleware
     exposing
         ( Authorization
@@ -36,6 +34,7 @@ import Route exposing (Route)
 import Route.Path
 import Shared
 import Shared.Msg exposing (Msg(..))
+import ToString
 import Url exposing (Url)
 import View exposing (View)
 
@@ -70,10 +69,38 @@ type Msg
     = OnUrlRequest UrlRequest
     | OnUrlChange Url
     | ReceiveAuthorizations (Result Http.Error (List Authorization))
-    | ChangeProvider String
     | Login
     | GetUser
     | ReceiveUser (Result Http.Error Value)
+
+
+msgToString : Msg -> String
+msgToString msg =
+    case msg of
+        Login ->
+            "Login"
+
+        OnUrlRequest _ ->
+            "OnUrlRequest _"
+
+        OnUrlChange _ ->
+            "OnUrlChange _"
+
+        ReceiveAuthorizations _ ->
+            "ReceiveAuthorizations _"
+
+        GetUser ->
+            "GetUser"
+
+        ReceiveUser user_result ->
+            "ReceiveUser "
+                ++ (case user_result of
+                        Ok user ->
+                            "Ok " ++ Json.Encode.encode 0 user
+
+                        Err err ->
+                            "Error " ++ ToString.httpError err
+                   )
 
 
 {-| GitHub requires the "User-Agent" header.
@@ -243,7 +270,7 @@ update msg m =
         ReceiveAuthorizations result ->
             case result of
                 Err err ->
-                    ( { model | msg = Just <| Debug.toString err }, Effect.none )
+                    ( { model | msg = Just <| ToString.httpError err }, Effect.none )
 
                 Ok authorizations ->
                     let
@@ -268,9 +295,6 @@ update msg m =
                     , Effect.none
                     )
 
-        ChangeProvider provider ->
-            ( lookupProvider { model | provider = provider }, Effect.none )
-
         Login ->
             case model.tokenAuthorization of
                 Nothing ->
@@ -282,13 +306,19 @@ update msg m =
                     case authorize authorization of
                         Nothing ->
                             ( { model
-                                | msg = Just ("Bad Uri in authorization " ++ Debug.toString authorization)
+                                | msg =
+                                    Just
+                                        ("Bad Uri in authorization (one of "
+                                            ++ authorization.authorization.authorizationUri
+                                            ++ ", "
+                                            ++ authorization.authorization.redirectUri
+                                        )
                               }
                             , Effect.none
                             )
 
                         Just url ->
-                            ( model, Effect.sendCmd <| Navigation.load <| Url.toString url )
+                            ( model, Effect.loadExternalUrl <| Url.toString url )
 
         GetUser ->
             Tuple.mapSecond Effect.sendCmd (getUser model)
@@ -296,7 +326,7 @@ update msg m =
         ReceiveUser result ->
             case result of
                 Err err ->
-                    ( { model | reply = Nothing, msg = Just <| Debug.toString err }
+                    ( { model | reply = Nothing, msg = Just <| ToString.httpError err }
                     , Effect.none
                     )
 
@@ -310,29 +340,14 @@ update msg m =
                     )
 
 
-myButton : List (Attribute Msg) -> String -> Msg -> Element Msg
-myButton attrs label onPress =
-    button
-        ([ Background.color (rgb 0.5 0.5 1)
-         , Border.width 1
-         , Element.focused [ Background.color (rgb 1 1 0) ]
-         , Element.mouseOver [ Background.color (rgb 1 1 0) ]
-         ]
-            ++ attrs
-        )
-        { onPress = Just onPress
-        , label = text label
-        }
-
-
 viewMain : Element Msg
 viewMain =
     column [ centerX ]
         [ el [ heading 1 ] <| text "OAuthMiddleware Example"
         , paragraph [] [ text "Provider: GitHub" ]
         , column [ centerX ]
-            [ myButton [ centerX ] "Login" Login
-            , myButton [ centerX ] "Get User" GetUser
+            [ My.button [ centerX ] "Login" Login
+            , My.button [ centerX ] "Get User" GetUser
             ]
         ]
 
@@ -354,7 +369,7 @@ viewMessageLog model =
     column [ paddingEach { top = 10, right = 0, bottom = 0, left = 0 } ] <|
         text "--- Message Log: ---"
             :: List.map
-                (\msg -> Element.paragraph [] [ text <| Debug.toString msg ])
+                (\msg -> Element.paragraph [] [ text <| msgToString msg ])
                 model.received_msg
 
 
