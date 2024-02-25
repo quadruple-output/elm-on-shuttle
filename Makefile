@@ -25,3 +25,7 @@ clean:
 .PHONY: run
 run: build_ui
 	cargo shuttle run
+
+.PHONY: deploy
+deploy: build
+	cargo shuttle deploy
