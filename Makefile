@@ -1,8 +1,9 @@
 .PHONY: help
 help:
 	@echo 'There is no default target. Try these targets:'
-	@echo '  make build – build ui and server'
-	@echo '  make run   – bulid ui and run the server locally'
+	@echo '  make build  – build ui and server'
+	@echo '  make run    – build ui and run the server locally'
+	@echo '  make deploy – build all and deploy on shuttle'
 	@echo '  make clean'
 
 .PHONY: build
