@@ -3,6 +3,7 @@ use ::std::path::PathBuf;
 use ::tower_http::services::{ServeDir, ServeFile};
 
 mod api;
+mod oauth;
 mod tracing;
 
 #[shuttle_runtime::main]
@@ -11,6 +12,7 @@ async fn main() -> shuttle_axum::ShuttleAxum {
 
     let router = Router::new()
         .nest("/api", api::router())
+        .nest("/oauth", oauth::router())
         .nest_service("/", static_file_service());
 
     Ok(tracing::wrap_router(router).into())

@@ -155,7 +155,7 @@ init url _ =
                     , tokenUri = "https://github.com/login/oauth/access_token"
                     , apiUri = "https://api.github.com/"
                     , clientId = "Iv1.b5ba4dcd32da9063"
-                    , redirectUri = "https://elm-on-shuttle.shuttleapp.rs/sign-in"
+                    , redirectUri = "https://elm-on-shuttle.shuttleapp.rs/oauth/callback/github"
                     , scopes = Dict.fromList [ ( "user", "user" ) ]
                     }
                   )
