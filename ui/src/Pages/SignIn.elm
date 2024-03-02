@@ -7,27 +7,24 @@
 module Pages.SignIn exposing (Model, Msg, page)
 
 import Browser exposing (UrlRequest)
-import Dict exposing (Dict)
+import Dict
 import Effect exposing (Effect)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Font as Font
 import Element.Region exposing (heading)
+import GitHub
 import Http
 import Json.Decode exposing (Value)
 import Json.Encode
 import MyElements as My
 import OAuthMiddleware
     exposing
-        ( Authorization
-        , ResponseToken
-        , TokenAuthorization
+        ( ResponseToken
         , TokenState(..)
-        , authorize
-        , locationToRedirectBackUri
         , receiveTokenAndState
         )
-import OAuthMiddleware.EncodeDecode exposing (authorizationsEncoder, responseTokenEncoder)
+import OAuthMiddleware.EncodeDecode exposing (responseTokenEncoder)
 import Page exposing (Page)
 import Platform.Cmd as Cmd
 import Route exposing (Route)
@@ -36,7 +33,13 @@ import Shared
 import Shared.Msg exposing (Msg(..))
 import ToString
 import Url exposing (Url)
+import Url.Builder as Builder
 import View exposing (View)
+
+
+oAuthRedirectUrl : Url -> Url
+oAuthRedirectUrl url =
+    { url | path = "/oauth/callback/github", query = Nothing, fragment = Nothing }
 
 
 page : Shared.Model -> Route () -> Page Model Msg
@@ -50,17 +53,14 @@ page _ route =
 
 
 type alias Model =
-    { authorization : Maybe Authorization
+    { url : Url
     , token : Maybe ResponseToken
     , state : Maybe String
     , msg : Maybe String
     , replyType : String
     , reply : Maybe Value
     , redirectBackUri : String
-    , provider : String
-    , authorizations : Dict String Authorization
-    , tokenAuthorization : Maybe TokenAuthorization
-    , api : Maybe Api
+    , api : Api
     , received_msg : List Msg
     }
 
@@ -68,7 +68,6 @@ type alias Model =
 type Msg
     = OnUrlRequest UrlRequest
     | OnUrlChange Url
-    | ReceiveAuthorizations (Result Http.Error (List Authorization))
     | Login
     | GetUser
     | ReceiveUser (Result Http.Error Value)
@@ -85,9 +84,6 @@ msgToString msg =
 
         OnUrlChange _ ->
             "OnUrlChange _"
-
-        ReceiveAuthorizations _ ->
-            "ReceiveAuthorizations _"
 
         GetUser ->
             "GetUser"
@@ -115,12 +111,6 @@ type alias Api =
     }
 
 
-apis : Dict String Api
-apis =
-    Dict.fromList
-        [ ( "GitHub", { getUser = "user" } ) ]
-
-
 init : Url -> () -> ( Model, Effect Msg )
 init url _ =
     let
@@ -138,47 +128,19 @@ init url _ =
                 NoToken ->
                     ( Nothing, Nothing, Nothing )
     in
-    ( lookupProvider
-        { authorization = Nothing
-        , token = token
-        , state = state
-        , msg = msg
-        , replyType = "Token"
-        , reply =
+    ( { url = url
+      , token = token
+      , state = state
+      , msg = msg
+      , replyType = "Token"
+      , reply =
             Maybe.map responseTokenEncoder token
 
-        -- , redirectBackUri = locationToRedirectBackUri url
-        , redirectBackUri = Url.toString { url | query = Nothing, fragment = Nothing }
-        , authorizations =
-            Dict.fromList
-                [ ( "GitHub"
-                  , { name = "GitHub"
-                    , authorizationUri = "https://github.com/login/oauth/authorize"
-                    , tokenUri = "https://github.com/login/oauth/access_token"
-                    , apiUri = "https://api.github.com/"
-                    , clientId = "Iv1.b5ba4dcd32da9063"
-                    , redirectUri =
-                        Url.toString
-                            { url
-                                | path = "/oauth/callback/github"
-                                , query = Nothing
-                                , fragment = Nothing
-                            }
-                    , scopes = Dict.fromList [ ( "user", "user" ) ]
-                    }
-                  )
-                ]
-        , provider =
-            case state of
-                Just p ->
-                    p
-
-                Nothing ->
-                    "GitHub"
-        , tokenAuthorization = Nothing
-        , api = Nothing
-        , received_msg = []
-        }
+      -- , redirectBackUri = locationToRedirectBackUri url
+      , redirectBackUri = Url.toString { url | query = Nothing, fragment = Nothing }
+      , api = { getUser = "user" }
+      , received_msg = []
+      }
     , Effect.replaceRoute { path = Route.Path.SignIn, query = Dict.empty, hash = Nothing }
     )
 
@@ -194,71 +156,22 @@ getUser model =
             )
 
         Just token ->
-            case ( model.api, model.authorization ) of
-                ( Just api, Just auth ) ->
-                    let
-                        url =
-                            auth.apiUri ++ api.getUser
+            let
+                apiUrl =
+                    GitHub.oAuth.apiUrl
 
-                        req =
-                            Http.request
-                                { method = "GET"
-                                , headers = OAuthMiddleware.use token [ userAgentHeader ]
-                                , url = url
-                                , body = Http.emptyBody
-                                , expect = Http.expectJson ReceiveUser Json.Decode.value
-                                , timeout = Nothing
-                                , tracker = Nothing
-                                }
-                    in
-                    ( model, req )
-
-                _ ->
-                    ( { model | msg = Just "No known API." }
-                    , Cmd.none
-                    )
-
-
-lookupProvider : Model -> Model
-lookupProvider model =
-    let
-        authorization =
-            case Dict.get model.provider model.authorizations of
-                Nothing ->
-                    Maybe.map (\( _, auth ) -> auth) (List.head <| Dict.toList model.authorizations)
-
-                Just auth ->
-                    Just auth
-    in
-    case authorization of
-        Nothing ->
-            model
-
-        Just auth ->
-            case List.head <| Dict.toList auth.scopes of
-                Nothing ->
-                    model
-
-                Just ( _, scope ) ->
-                    let
-                        provider =
-                            auth.name
-
-                        api =
-                            Dict.get provider apis
-                    in
-                    { model
-                        | provider = provider
-                        , tokenAuthorization =
-                            Just
-                                { authorization = auth
-                                , scope = [ scope ]
-                                , state = Just model.provider
-                                , redirectBackUri = model.redirectBackUri
-                                }
-                        , api = api
-                        , authorization = authorization
-                    }
+                req =
+                    Http.request
+                        { method = "GET"
+                        , headers = OAuthMiddleware.use token [ userAgentHeader ]
+                        , url = { apiUrl | path = model.api.getUser } |> Url.toString
+                        , body = Http.emptyBody
+                        , expect = Http.expectJson ReceiveUser Json.Decode.value
+                        , timeout = Nothing
+                        , tracker = Nothing
+                        }
+            in
+            ( model, req )
 
 
 update : Msg -> Model -> ( Model, Effect Msg )
@@ -274,58 +187,21 @@ update msg m =
         OnUrlChange _ ->
             ( model, Effect.none )
 
-        ReceiveAuthorizations result ->
-            case result of
-                Err err ->
-                    ( { model | msg = Just <| ToString.httpError err }, Effect.none )
-
-                Ok authorizations ->
-                    let
-                        ( replyType, reply ) =
-                            case ( model.token, model.msg ) of
-                                ( Nothing, Nothing ) ->
-                                    ( "Authorizations"
-                                    , Just <| authorizationsEncoder authorizations
-                                    )
-
-                                _ ->
-                                    ( model.replyType, model.reply )
-                    in
-                    ( lookupProvider
-                        { model
-                            | authorizations =
-                                Dict.fromList <|
-                                    List.map (\a -> ( a.name, a )) authorizations
-                            , replyType = replyType
-                            , reply = reply
-                        }
-                    , Effect.none
-                    )
-
         Login ->
-            case model.tokenAuthorization of
-                Nothing ->
-                    ( { model | msg = Just "No provider selected." }
-                    , Effect.none
-                    )
+            let
+                oAuthUrl =
+                    GitHub.oAuth.authorizationUrl
 
-                Just authorization ->
-                    case authorize authorization of
-                        Nothing ->
-                            ( { model
-                                | msg =
-                                    Just
-                                        ("Bad Uri in authorization (one of "
-                                            ++ authorization.authorization.authorizationUri
-                                            ++ ", "
-                                            ++ authorization.authorization.redirectUri
-                                        )
-                              }
-                            , Effect.none
-                            )
-
-                        Just url ->
-                            ( model, Effect.loadExternalUrl <| Url.toString url )
+                query =
+                    [ Builder.string "client_id" GitHub.oAuth.clientId
+                    , Builder.string "redirect_uri" <|
+                        Url.toString
+                            (oAuthRedirectUrl model.url)
+                    ]
+                        |> Builder.toQuery
+                        |> String.dropLeft 1
+            in
+            ( model, Effect.loadExternalUrl <| Url.toString { oAuthUrl | query = Just query } )
 
         GetUser ->
             Tuple.mapSecond Effect.sendCmd (getUser model)
