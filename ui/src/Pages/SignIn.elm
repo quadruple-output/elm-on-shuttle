@@ -146,7 +146,9 @@ init url _ =
         , replyType = "Token"
         , reply =
             Maybe.map responseTokenEncoder token
-        , redirectBackUri = locationToRedirectBackUri url
+
+        -- , redirectBackUri = locationToRedirectBackUri url
+        , redirectBackUri = Url.toString { url | query = Nothing, fragment = Nothing }
         , authorizations =
             Dict.fromList
                 [ ( "GitHub"
@@ -155,7 +157,13 @@ init url _ =
                     , tokenUri = "https://github.com/login/oauth/access_token"
                     , apiUri = "https://api.github.com/"
                     , clientId = "Iv1.b5ba4dcd32da9063"
-                    , redirectUri = "https://elm-on-shuttle.shuttleapp.rs/oauth/callback/github"
+                    , redirectUri =
+                        Url.toString
+                            { url
+                                | path = "/oauth/callback/github"
+                                , query = Nothing
+                                , fragment = Nothing
+                            }
                     , scopes = Dict.fromList [ ( "user", "user" ) ]
                     }
                   )
@@ -172,7 +180,6 @@ init url _ =
         , received_msg = []
         }
     , Effect.replaceRoute { path = Route.Path.SignIn, query = Dict.empty, hash = Nothing }
-      -- , Navigation.replaceUrl key "#"
     )
 
 
@@ -340,18 +347,6 @@ update msg m =
                     )
 
 
-viewMain : Element Msg
-viewMain =
-    column [ centerX ]
-        [ el [ heading 1 ] <| text "OAuthMiddleware Example"
-        , paragraph [] [ text "Provider: GitHub" ]
-        , column [ centerX ]
-            [ My.button [ centerX ] "Login" Login
-            , My.button [ centerX ] "Get User" GetUser
-            ]
-        ]
-
-
 view : Model -> View Msg
 view model =
     { title = "OAuthMiddleware Example"
@@ -362,6 +357,18 @@ view model =
                 :: viewLastErrorOrResponse model
                 ++ [ viewMessageLog model ]
     }
+
+
+viewMain : Element Msg
+viewMain =
+    column [ centerX ]
+        [ el [ heading 1 ] <| text "OAuthMiddleware Example"
+        , paragraph [] [ text "Provider: GitHub" ]
+        , column [ centerX ]
+            [ My.button [ centerX ] "Login" Login
+            , My.button [ centerX ] "Get User" GetUser
+            ]
+        ]
 
 
 viewMessageLog : Model -> Element msg

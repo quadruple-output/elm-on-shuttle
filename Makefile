@@ -23,7 +23,11 @@ clean:
 	cargo clean
 
 .PHONY: run
-run: build_ui
+run: build
+	# `open` may only work on a Mac. The opened browser will not be able to connect to the locally
+	# running server, until the `cargo shuttle run` command below has finished initializing.
+	# The host name `localhost.home.ig` requires an entry in `/etc/hosts` to point to 127.0.0.1
+	open http://localhost.home.ig:8000/
 	cargo shuttle run
 
 .PHONY: deploy
