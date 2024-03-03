@@ -17,6 +17,8 @@ fn try_get_secret(store: &ShuttleSecretStore, key: &str) -> Result<String> {
     if let Some(secret) = store.get(key) {
         Ok(secret)
     } else {
-        Err(anyhow!("Secret {key} is not configured in secret store"))
+        Err(anyhow!(
+            "Secret {key} is not configured in `server/Secrets.toml`"
+        ))
     }
 }
