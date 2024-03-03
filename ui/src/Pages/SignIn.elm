@@ -1,5 +1,5 @@
 --
--- This is an adaptation of
+-- This is an adaptation (and massive simplification) of
 -- https://github.com/billstclair/elm-oauth-middleware/blob/3.0.0/example/example.elm
 --
 
@@ -18,13 +18,6 @@ import Http
 import Json.Decode exposing (Value)
 import Json.Encode
 import MyElements as My
-import OAuthMiddleware
-    exposing
-        ( ResponseToken
-        , TokenState(..)
-        , receiveTokenAndState
-        )
-import OAuthMiddleware.EncodeDecode exposing (responseTokenEncoder)
 import Page exposing (Page)
 import Platform.Cmd as Cmd
 import Route exposing (Route)
@@ -54,14 +47,13 @@ page _ route =
 
 type alias Model =
     { url : Url
-    , token : Maybe ResponseToken
+    , token : Maybe String
     , state : Maybe String
     , msg : Maybe String
     , replyType : String
     , reply : Maybe Value
-    , redirectBackUri : String
     , api : Api
-    , received_msg : List Msg
+    , receivedMsg : List Msg
     }
 
 
@@ -99,13 +91,6 @@ msgToString msg =
                    )
 
 
-{-| GitHub requires the "User-Agent" header.
--}
-userAgentHeader : Http.Header
-userAgentHeader =
-    Http.header "User-Agent" "elm-on-shuttle"
-
-
 type alias Api =
     { getUser : String
     }
@@ -113,33 +98,14 @@ type alias Api =
 
 init : Url -> () -> ( Model, Effect Msg )
 init url _ =
-    let
-        ( token, state, msg ) =
-            case receiveTokenAndState url of
-                TokenAndState tok stat ->
-                    ( Just tok, stat, Nothing )
-
-                TokenErrorAndState m stat ->
-                    ( Nothing, stat, Just m )
-
-                TokenDecodeError m ->
-                    ( Nothing, Nothing, Just m )
-
-                NoToken ->
-                    ( Nothing, Nothing, Nothing )
-    in
     ( { url = url
-      , token = token
-      , state = state
-      , msg = msg
+      , token = url.fragment
+      , state = Nothing
+      , msg = Nothing
       , replyType = "Token"
-      , reply =
-            Maybe.map responseTokenEncoder token
-
-      -- , redirectBackUri = locationToRedirectBackUri url
-      , redirectBackUri = Url.toString { url | query = Nothing, fragment = Nothing }
-      , api = { getUser = "user" }
-      , received_msg = []
+      , reply = Nothing
+      , api = { getUser = "/user" }
+      , receivedMsg = []
       }
     , Effect.replaceRoute { path = Route.Path.SignIn, query = Dict.empty, hash = Nothing }
     )
@@ -163,7 +129,11 @@ getUser model =
                 req =
                     Http.request
                         { method = "GET"
-                        , headers = OAuthMiddleware.use token [ userAgentHeader ]
+                        , headers =
+                            -- GitHub requires the "User-Agent" header.
+                            [ Http.header "User-Agent" "elm-on-shuttle"
+                            , Http.header "Authorization" <| "Bearer " ++ token
+                            ]
                         , url = { apiUrl | path = model.api.getUser } |> Url.toString
                         , body = Http.emptyBody
                         , expect = Http.expectJson ReceiveUser Json.Decode.value
@@ -178,7 +148,7 @@ update : Msg -> Model -> ( Model, Effect Msg )
 update msg m =
     let
         model =
-            { m | received_msg = m.received_msg ++ [ msg ] }
+            { m | receivedMsg = m.receivedMsg ++ [ msg ] }
     in
     case msg of
         OnUrlRequest _ ->
@@ -225,7 +195,7 @@ update msg m =
 
 view : Model -> View Msg
 view model =
-    { title = "OAuthMiddleware Example"
+    { title = "Elm on Shuttle"
     , attributes = [ height fill, width fill, padding 10 ]
     , element =
         column [ width fill ] <|
@@ -238,8 +208,8 @@ view model =
 viewMain : Element Msg
 viewMain =
     column [ centerX ]
-        [ el [ heading 1 ] <| text "OAuthMiddleware Example"
-        , paragraph [] [ text "Provider: GitHub" ]
+        [ el [ heading 1, Font.heavy ] <| text "OAuth Login Page"
+        , paragraph [] [ text "Authorization Provider is GitHub" ]
         , column [ centerX ]
             [ My.button [ centerX ] "Login" Login
             , My.button [ centerX ] "Get User" GetUser
@@ -253,7 +223,7 @@ viewMessageLog model =
         text "--- Message Log: ---"
             :: List.map
                 (\msg -> Element.paragraph [] [ text <| msgToString msg ])
-                model.received_msg
+                model.receivedMsg
 
 
 viewLastErrorOrResponse : Model -> List (Element msg)

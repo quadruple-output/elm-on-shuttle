@@ -1,9 +1,14 @@
-use ::axum::{extract::Query, routing::get, Router};
+use ::axum::{
+    extract::Query,
+    response::{IntoResponse, Redirect, Response},
+    routing::get,
+    Json, Router,
+};
 use ::reqwest;
 use ::serde::{Deserialize, Serialize};
 use ::std::collections::HashMap;
-use ::tracing::debug;
-use axum::Json;
+
+const GITHUB_TOKEN_SERVICE: &str = "https://github.com/login/oauth/access_token";
 
 pub(crate) fn router(github_app_client_secret: String) -> Router<()> {
     Router::new().route(
@@ -13,56 +18,114 @@ pub(crate) fn router(github_app_client_secret: String) -> Router<()> {
 }
 
 #[derive(Debug, Deserialize)]
-struct CallbackParams {
+struct CallbackQueryParams {
     code: String,
-    state: Option<String>,
+    _state: Option<String>,
 }
 
 #[derive(Default, Serialize)]
-struct TokenResponse {
+struct ReceivedResponse {
     server_status: Option<String>,
     error_message: Option<String>,
-    raw_body: Option<String>,
+    token_response: Option<GithubTokenResponse>,
+}
+
+#[derive(Serialize)]
+enum GithubTokenResponse {
+    Ok(GithubTokenResponseOk),
+    Err(GithubTokenResponseErr),
+    Unrecognized { raw: String },
+}
+
+/// The response to a token request (if successful), as returned by GitHub
+#[derive(Debug, Deserialize, Serialize)]
+struct GithubTokenResponseOk {
+    /// The user access token. The token starts with `ghu_`.
+    access_token: String,
+    /// The number of seconds until access_token expires. If you disabled expiration of user access
+    /// tokens, this parameter will be omitted. The value will always be `28800` (8 hours).
+    expires_in: Option<u32>,
+    /// The refresh token. If you disabled expiration of user access tokens, this parameter will be
+    /// omitted. The token starts with `ghr_`.
+    refresh_token: Option<String>,
+    /// The number of seconds until `refresh_token` expires. If you disabled expiration of user
+    /// access tokens, this parameter will be omitted. The value will always be `15811200` (6
+    /// months).
+    refresh_token_expires_in: Option<u32>,
+    /// The scopes that the token has. This value will always be an empty string. Unlike a
+    /// traditional OAuth token, the user access token is limited to the permissions that both your
+    /// app and the user have.
+    scope: String,
+    /// The type of token. The value will always be `bearer`.
+    token_type: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct GithubTokenResponseErr {
+    /// Error-ID
+    error: String,
+    /// One-sentence description of the error
+    error_description: Option<String>,
+    /// Link to further documentation on the error
+    error_uri: Option<String>,
 }
 
 async fn github_callback(
     app_client_secret: String,
-    params: Query<CallbackParams>,
-) -> Json<TokenResponse> {
-    let CallbackParams { code, state } = params.0;
-    let info = match (&*code, state) {
-        (code, Some(state)) => format!("code: {code}, state: {state}"),
-        (code, None) => format!("code: {code}, no state"),
-    };
-    debug!("{info}");
-
-    let mut map = HashMap::new();
-    map.insert("client_id", "Iv1.b5ba4dcd32da9063".to_string());
-    map.insert("client_secret", app_client_secret);
-    map.insert("code", code.to_string());
-    map.insert("redirect_uri", "".to_string());
-
-    let client = reqwest::Client::new();
-    let response = client
-        .post("https://github.com/login/oauth/access_token")
-        .header(reqwest::header::ACCEPT, "application/json")
-        .json(&map)
+    query_params: Query<CallbackQueryParams>,
+) -> Response {
+    // Use the received code to request an access token from GitHub:
+    let response = reqwest::Client::new()
+        .post(GITHUB_TOKEN_SERVICE)
+        .header(reqwest::header::ACCEPT, mime::APPLICATION_JSON.as_ref())
+        .json(&HashMap::from([
+            ("client_id", "Iv1.b5ba4dcd32da9063"),
+            ("client_secret", &app_client_secret),
+            ("code", &query_params.code),
+        ]))
         .send()
         .await;
 
-    let mut out = TokenResponse::default();
+    let out = analyze_client_response(response).await;
+    if let ReceivedResponse {
+        server_status: _,
+        error_message: _,
+        token_response: Some(GithubTokenResponse::Ok(ok_response)),
+    } = out
+    {
+        let new_url = format!("/sign-in#{}", ok_response.access_token);
+        Redirect::to(&new_url).into_response()
+    } else {
+        // Something went wrong. Just dump what we have.
+        Json(out).into_response()
+    }
+}
+
+async fn analyze_client_response(response: reqwest::Result<reqwest::Response>) -> ReceivedResponse {
+    let mut out = ReceivedResponse::default();
     match response {
         Ok(response) => {
-            let status = response.status();
-            let status_reason = status.canonical_reason().unwrap_or("<unknown>");
-            out.server_status = Some(format!("{status}: {status_reason}"));
-            let body = response.text().await;
-            match body {
-                Ok(body) => out.raw_body = Some(body),
+            out.server_status = Some(format!("{}", response.status()));
+            match response.text().await {
+                Ok(body) => out.token_response = Some(parse_token_response(body)),
                 Err(e) => out.error_message = Some(format!("Error receiving response body: {e}")),
             }
         }
-        Err(e) => out.error_message = Some(format!("Error connecting to token service: {e}")),
+        Err(e) => {
+            out.error_message = Some(format!("Cannot connect to {GITHUB_TOKEN_SERVICE}: {e}"))
+        }
+    };
+    out
+}
+
+fn parse_token_response(body: String) -> GithubTokenResponse {
+    match (
+        serde_json::from_str::<GithubTokenResponseOk>(&body),
+        serde_json::from_str::<GithubTokenResponseErr>(&body),
+        body,
+    ) {
+        (Ok(ok_response), _, _) => GithubTokenResponse::Ok(ok_response),
+        (Err(_), Ok(err_response), _) => GithubTokenResponse::Err(err_response),
+        (Err(_), Err(_), body) => GithubTokenResponse::Unrecognized { raw: body },
     }
-    Json(out)
 }
