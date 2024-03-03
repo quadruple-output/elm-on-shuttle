@@ -8,7 +8,9 @@ publish.workspace = true
 
 [dependencies]
 axum.workspace = true
+reqwest.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 shuttle-axum.workspace = true
 shuttle-runtime.workspace = true
 tokio.workspace = true
