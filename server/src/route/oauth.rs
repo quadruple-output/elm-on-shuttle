@@ -5,8 +5,11 @@ use ::std::collections::HashMap;
 use ::tracing::debug;
 use axum::Json;
 
-pub(crate) fn router() -> Router<()> {
-    Router::new().route("/callback/github", get(github_callback))
+pub(crate) fn router(github_app_client_secret: String) -> Router<()> {
+    Router::new().route(
+        "/callback/github",
+        get(|params| github_callback(github_app_client_secret, params)),
+    )
 }
 
 #[derive(Debug, Deserialize)]
@@ -22,7 +25,10 @@ struct TokenResponse {
     raw_body: Option<String>,
 }
 
-async fn github_callback(params: Query<CallbackParams>) -> Json<TokenResponse> {
+async fn github_callback(
+    app_client_secret: String,
+    params: Query<CallbackParams>,
+) -> Json<TokenResponse> {
     let CallbackParams { code, state } = params.0;
     let info = match (&*code, state) {
         (code, Some(state)) => format!("code: {code}, state: {state}"),
@@ -32,10 +38,7 @@ async fn github_callback(params: Query<CallbackParams>) -> Json<TokenResponse> {
 
     let mut map = HashMap::new();
     map.insert("client_id", "Iv1.b5ba4dcd32da9063".to_string());
-    map.insert(
-        "client_secret",
-        "".to_string(), // !!!!!!!!!!!!!!!!!!!!!!! TODO
-    );
+    map.insert("client_secret", app_client_secret);
     map.insert("code", code.to_string());
     map.insert("redirect_uri", "".to_string());
 
