@@ -7,14 +7,18 @@ use ::axum::{
 use ::reqwest;
 use ::serde::{Deserialize, Serialize};
 use ::std::collections::HashMap;
+use axum::routing::any;
 
 const GITHUB_TOKEN_SERVICE: &str = "https://github.com/login/oauth/access_token";
 
 pub(crate) fn router(github_app_client_secret: String) -> Router<()> {
-    Router::new().route(
-        "/callback/github",
-        get(|params| github_callback(github_app_client_secret, params)),
-    )
+    Router::new()
+        .route(
+            "/callback/github",
+            get(|params| github_callback(github_app_client_secret, params)),
+        )
+        .route("/*_", any(super::no_route))
+        .route("/", any(super::no_route))
 }
 
 #[derive(Debug, Deserialize)]
