@@ -1,5 +1,6 @@
 module Pages.Home_ exposing (Model, Msg, page)
 
+import Dict
 import Effect exposing (Effect)
 import Element exposing (..)
 import Http
@@ -52,7 +53,7 @@ update msg model =
             ( { model | greeting = Just greeting }, Effect.none )
 
         Navigate path ->
-            ( model, Effect.pushRoutePath path )
+            ( model, Effect.pushRoute { path = path, query = Dict.empty, hash = Nothing } )
 
 
 view : Model -> View Msg
