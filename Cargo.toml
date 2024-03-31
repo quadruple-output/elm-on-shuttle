@@ -1,5 +1,5 @@
 [workspace]
-members = [ "dev_server","server"]
+members = ["dev_server", "server"]
 resolver = "2"
 
 [workspace.package]
@@ -10,20 +10,33 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace.dependencies]
-anyhow = "1.0.80"
-axum = "0.7.4"
+anyhow = "1.0.81"
+axum = { version = "0.7.5", features = ["ws"] } # ws=WebSocket
+futures-util = "0.3.30"
+http-body = "1.0.0"
+http-body-util = "0.1.1"
+hyper = { version = "1.2.0", features = ["client"] }
+hyper-util = { version = "0.1.3", features = [
+    "default",
+    "client",
+    "client-legacy",
+    "http1",
+    "http2",
+    "server",
+    "tokio",
+] }
 lazy_static = "1.4.0"
 mime = "0.3.17"
-reqwest = { version = "0.11.25", features = ["json"] }
+reqwest = { version = "0.12.2", features = ["json", "stream"] }
 serde = { version = "1.0.197", features = ["derive"] }
-serde_json = "1.0.114"
-shuttle-axum = "0.41.0"
-shuttle-secrets = "0.41.0"
-tokio = { version = "1.36.0", features = ["rt-multi-thread"] }
+serde_json = "1.0.115"
+shuttle-axum = "0.42.0"
+tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
+tokio-tungstenite = "0.21.0"
 tower-http = { version = "0.5.2", features = ["fs", "trace"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [workspace.dependencies.shuttle-runtime]
-version = "0.41.0"
+version = "0.42.0"
 default-features = false # avoids initialization of shuttle's default tracing subscriber

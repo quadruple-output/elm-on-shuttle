@@ -1,5 +1,5 @@
 use ::anyhow::{anyhow, Result};
-use ::shuttle_secrets::SecretStore as ShuttleSecretStore;
+use ::shuttle_runtime::SecretStore as ShuttleSecretStore;
 
 const SECRET_KEY_GITHUB_APP_CLIENT_SECRET: &str = "GITHUB_APP_CLIENT_SECRET";
 

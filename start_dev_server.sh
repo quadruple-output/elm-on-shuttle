@@ -22,3 +22,5 @@ rust_server_pid=$!
 open http://localhost.home.ig:8080/
 
 cargo run -p dev_server | awk '{print "dev-server: " $0}' 2>&1
+kill "$rust_server_pid"
+kill "$elm_server_pid"
