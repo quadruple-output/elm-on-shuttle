@@ -187,7 +187,14 @@ update msg m =
                     ( { model
                         | replyType = "API Response"
                         , reply = Just reply
-                        , msg = Nothing
+                        , msg =
+                            Just <|
+                                "Hello "
+                                    ++ (Result.withDefault "unknown Person" <|
+                                            Json.Decode.decodeValue
+                                                (Json.Decode.field "name" Json.Decode.string)
+                                                reply
+                                       )
                       }
                     , Effect.none
                     )
