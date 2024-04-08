@@ -102,33 +102,10 @@ getUser : Model -> ( Model, Cmd Msg )
 getUser model =
     case model.token of
         Nothing ->
-            ( { model
-                | msg = Just "You must login before getting user information."
-              }
-            , Cmd.none
-            )
+            ( { model | msg = Just "You must login before getting user information." }, Cmd.none )
 
         Just token ->
-            let
-                apiUrl =
-                    GitHub.oAuth.apiUrl
-
-                req =
-                    Http.request
-                        { method = "GET"
-                        , headers =
-                            -- GitHub requires the "User-Agent" header.
-                            [ Http.header "User-Agent" "elm-on-shuttle"
-                            , Http.header "Authorization" <| "Bearer " ++ token
-                            ]
-                        , url = { apiUrl | path = "/user" } |> Url.toString
-                        , body = Http.emptyBody
-                        , expect = Http.expectJson ReceiveUser Json.Decode.value
-                        , timeout = Nothing
-                        , tracker = Nothing
-                        }
-            in
-            ( model, req )
+            ( model, GitHub.getUser token ReceiveUser )
 
 
 update : Msg -> Model -> ( Model, Effect Msg )
@@ -145,7 +122,7 @@ update msg m =
             ( model, Effect.none )
 
         Login ->
-            ( model, Effect.loadExternalUrl <| GitHub.loginUrl model.myUrl )
+            ( model, Effect.loadExternalUrl <| GitHub.oAuthLoginUrl model.myUrl )
 
         GetUser ->
             Tuple.mapSecond Effect.sendCmd (getUser model)

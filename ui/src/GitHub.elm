@@ -1,39 +1,49 @@
-module GitHub exposing (loginUrl, oAuth)
+module GitHub exposing (getUser, oAuthLoginUrl)
 
+import Http
+import Json.Decode
 import Url exposing (Protocol(..), Url)
 import Url.Builder exposing (string)
 
 
-oAuth : { tokenUrl : Url, apiUrl : Url, clientId : String }
-oAuth =
-    let
-        baseUrl : Url
-        baseUrl =
-            { protocol = Https
-            , host = "github.com"
-            , port_ = Nothing
-            , path = "/"
-            , query = Nothing
-            , fragment = Nothing
-            }
-    in
-    { tokenUrl = { baseUrl | path = "/login/oauth/access_token" }
-    , apiUrl = { baseUrl | host = "api.github.com" }
-    , clientId = "Iv1.b5ba4dcd32da9063"
-    }
-
-
-loginUrl : Url -> String
-loginUrl myUrl =
+oAuthLoginUrl : Url -> String
+oAuthLoginUrl myUrl =
     Url.Builder.crossOrigin gitHubPrePath
         [ "login", "oauth", "authorize" ]
-        [ string "client_id" oAuth.clientId
+        [ string "client_id" clientId
         , string "redirect_uri" (replacePath myUrl "/oauth/callback/github" |> Url.toString)
         ]
 
 
+getUser : String -> (Result Http.Error Json.Decode.Value -> msg) -> Cmd msg
+getUser token msg =
+    Http.request
+        { method = "GET"
+        , headers =
+            -- GitHub requires the "User-Agent" header.
+            [ Http.header "User-Agent" "elm-on-shuttle"
+            , Http.header "Authorization" <| "Bearer " ++ token
+            ]
+        , url = Url.Builder.crossOrigin apiPrePath [ "user" ] []
+        , body = Http.emptyBody
+        , expect = Http.expectJson msg Json.Decode.value
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
 
 -- Private helpers --
+
+
+clientId : String
+clientId =
+    "Iv1.b5ba4dcd32da9063"
+
+
+apiPrePath : String
+apiPrePath =
+    "https://api.github.com"
 
 
 gitHubPrePath : String
