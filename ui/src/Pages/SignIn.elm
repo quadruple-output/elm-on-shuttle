@@ -1,5 +1,5 @@
 --
--- This is an adaptation (and massive simplification) of
+-- Thanks to Bill St. Clair for the Elm OAuth Middleware example:
 -- https://github.com/billstclair/elm-oauth-middleware/blob/3.0.0/example/example.elm
 --
 
