@@ -26,13 +26,7 @@ import Shared
 import Shared.Msg exposing (Msg(..))
 import ToString
 import Url exposing (Url)
-import Url.Builder as Builder
 import View exposing (View)
-
-
-oAuthRedirectUrl : Url -> Url
-oAuthRedirectUrl url =
-    { url | path = "/oauth/callback/github", query = Nothing, fragment = Nothing }
 
 
 page : Shared.Model -> Route () -> Page Model Msg
@@ -46,13 +40,12 @@ page _ route =
 
 
 type alias Model =
-    { url : Url
+    { myUrl : Url
     , token : Maybe String
     , state : Maybe String
     , msg : Maybe String
     , replyType : String
     , reply : Maybe Value
-    , api : Api
     , receivedMsg : List Msg
     }
 
@@ -91,20 +84,14 @@ msgToString msg =
                    )
 
 
-type alias Api =
-    { getUser : String
-    }
-
-
 init : Url -> () -> ( Model, Effect Msg )
 init url _ =
-    ( { url = url
+    ( { myUrl = url
       , token = url.fragment
       , state = Nothing
       , msg = Nothing
       , replyType = "Token"
       , reply = Nothing
-      , api = { getUser = "/user" }
       , receivedMsg = []
       }
     , Effect.replaceRoute { path = Route.Path.SignIn, query = Dict.empty, hash = Nothing }
@@ -134,7 +121,7 @@ getUser model =
                             [ Http.header "User-Agent" "elm-on-shuttle"
                             , Http.header "Authorization" <| "Bearer " ++ token
                             ]
-                        , url = { apiUrl | path = model.api.getUser } |> Url.toString
+                        , url = { apiUrl | path = "/user" } |> Url.toString
                         , body = Http.emptyBody
                         , expect = Http.expectJson ReceiveUser Json.Decode.value
                         , timeout = Nothing
@@ -158,20 +145,7 @@ update msg m =
             ( model, Effect.none )
 
         Login ->
-            let
-                oAuthUrl =
-                    GitHub.oAuth.authorizationUrl
-
-                query =
-                    [ Builder.string "client_id" GitHub.oAuth.clientId
-                    , Builder.string "redirect_uri" <|
-                        Url.toString
-                            (oAuthRedirectUrl model.url)
-                    ]
-                        |> Builder.toQuery
-                        |> String.dropLeft 1
-            in
-            ( model, Effect.loadExternalUrl <| Url.toString { oAuthUrl | query = Just query } )
+            ( model, Effect.loadExternalUrl <| GitHub.loginUrl model.myUrl )
 
         GetUser ->
             Tuple.mapSecond Effect.sendCmd (getUser model)
