@@ -58,32 +58,6 @@ type Msg
     | ReceiveUser (Result Http.Error Value)
 
 
-msgToString : Msg -> String
-msgToString msg =
-    case msg of
-        Login ->
-            "Login"
-
-        OnUrlRequest _ ->
-            "OnUrlRequest _"
-
-        OnUrlChange _ ->
-            "OnUrlChange _"
-
-        GetUser ->
-            "GetUser"
-
-        ReceiveUser user_result ->
-            "ReceiveUser "
-                ++ (case user_result of
-                        Ok user ->
-                            "Ok " ++ Json.Encode.encode 0 user
-
-                        Err err ->
-                            "Error " ++ ToString.httpError err
-                   )
-
-
 init : Url -> () -> ( Model, Effect Msg )
 init url _ =
     ( { myUrl = url
@@ -96,16 +70,6 @@ init url _ =
       }
     , Effect.replaceRoute { path = Route.Path.SignIn, query = Dict.empty, hash = Nothing }
     )
-
-
-getUser : Model -> ( Model, Cmd Msg )
-getUser model =
-    case model.token of
-        Nothing ->
-            ( { model | msg = Just "You must login before getting user information." }, Cmd.none )
-
-        Just token ->
-            ( model, GitHub.getUser token ReceiveUser )
 
 
 update : Msg -> Model -> ( Model, Effect Msg )
@@ -125,7 +89,14 @@ update msg m =
             ( model, Effect.loadExternalUrl <| GitHub.oAuthLoginUrl model.myUrl )
 
         GetUser ->
-            Tuple.mapSecond Effect.sendCmd (getUser model)
+            case model.token of
+                Just token ->
+                    ( model, Effect.sendCmd <| GitHub.getUser token ReceiveUser )
+
+                Nothing ->
+                    ( { model | msg = Just "You must login before getting user information." }
+                    , Effect.none
+                    )
 
         ReceiveUser result ->
             case result of
@@ -209,3 +180,33 @@ viewLastErrorOrResponse model =
 
         ( Nothing, Nothing ) ->
             []
+
+
+
+-- helpers --
+
+
+msgToString : Msg -> String
+msgToString msg =
+    case msg of
+        Login ->
+            "Login"
+
+        OnUrlRequest _ ->
+            "OnUrlRequest _"
+
+        OnUrlChange _ ->
+            "OnUrlChange _"
+
+        GetUser ->
+            "GetUser"
+
+        ReceiveUser user_result ->
+            "ReceiveUser "
+                ++ (case user_result of
+                        Ok user ->
+                            "Ok " ++ Json.Encode.encode 0 user
+
+                        Err err ->
+                            "Error " ++ ToString.httpError err
+                   )

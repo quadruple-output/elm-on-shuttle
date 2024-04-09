@@ -19,4 +19,12 @@ httpError err =
             "Bad HTTP status code " ++ String.fromInt status
 
         Http.BadBody body ->
-            "Bad Body: " ++ body
+            let
+                shortenedBody =
+                    if String.length body < 200 then
+                        body
+
+                    else
+                        String.slice 0 200 body ++ "..."
+            in
+            "Bad Body: " ++ shortenedBody
