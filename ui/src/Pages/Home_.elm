@@ -1,9 +1,9 @@
 module Pages.Home_ exposing (Model, Msg, page)
 
+import Api.Greeting exposing (Greeting)
 import Dict
 import Effect exposing (Effect)
 import Element exposing (..)
-import Http
 import MyElements
 import Page exposing (Page)
 import Route exposing (Route)
@@ -23,34 +23,26 @@ page _ _ =
 
 
 type alias Model =
-    { greeting : Maybe (Result Http.Error String) }
+    { greeting : Greeting }
 
 
 type Msg
-    = NoOp
-    | ReceivedGreeting (Result Http.Error String)
+    = ReceivedGreeting Greeting
     | Navigate Path
 
 
 init : () -> ( Model, Effect Msg )
 init _ =
-    ( { greeting = Nothing }
-    , Effect.sendCmd <|
-        Http.get
-            { url = "/api/greet"
-            , expect = Http.expectString ReceivedGreeting
-            }
+    ( { greeting = Api.Greeting.Awaiting }
+    , Effect.sendCmd <| Api.Greeting.request ReceivedGreeting
     )
 
 
 update : Msg -> Model -> ( Model, Effect Msg )
 update msg model =
     case msg of
-        NoOp ->
-            ( model, Effect.none )
-
         ReceivedGreeting greeting ->
-            ( { model | greeting = Just greeting }, Effect.none )
+            ( { model | greeting = greeting }, Effect.none )
 
         Navigate path ->
             ( model, Effect.pushRoute { path = path, query = Dict.empty, hash = Nothing } )
@@ -63,22 +55,20 @@ view model =
     , element =
         el [ centerX, centerY ] <|
             column []
-                [ show_greeting model.greeting
+                [ viewGreeting model.greeting
                 , MyElements.button [ centerX ] "Sign-In" (Navigate Route.Path.SignIn)
-
-                -- , Element.link [] { url = "/sign-in", label = text "Sign-In" }
                 ]
     }
 
 
-show_greeting : Maybe (Result Http.Error String) -> Element msg
-show_greeting maybe_result_string =
-    case maybe_result_string of
-        Nothing ->
+viewGreeting : Greeting -> Element msg
+viewGreeting greeting =
+    case greeting of
+        Api.Greeting.Awaiting ->
             text "<wait...>"
 
-        Just (Ok greeting) ->
-            text greeting
+        Api.Greeting.Got message ->
+            text message
 
-        Just (Err _) ->
+        Api.Greeting.Failure ->
             text "<could not get greeting from server>"
