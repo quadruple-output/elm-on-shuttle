@@ -70,5 +70,5 @@ viewGreeting greeting =
         Api.Greeting.Got message ->
             text message
 
-        Api.Greeting.Failure ->
-            text "<could not get greeting from server>"
+        Api.Greeting.Failure errMessage ->
+            text <| "<" ++ errMessage ++ ">"

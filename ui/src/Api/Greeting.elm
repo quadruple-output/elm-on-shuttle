@@ -1,12 +1,13 @@
 module Api.Greeting exposing (Greeting(..), request)
 
 import Http
+import ToString
 
 
 type Greeting
     = Awaiting
     | Got String
-    | Failure
+    | Failure String
 
 
 request : (Greeting -> msg) -> Cmd msg
@@ -20,5 +21,5 @@ resultToGreeting result =
         Ok greeting ->
             Got greeting
 
-        Err _ ->
-            Failure
+        Err err ->
+            Failure <| ToString.httpError err
