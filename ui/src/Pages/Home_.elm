@@ -1,21 +1,23 @@
 module Pages.Home_ exposing (Model, Msg, page)
 
-import Api.Greeting exposing (Greeting)
+import Api.Greeting
 import Dict
 import Effect exposing (Effect)
 import Element exposing (..)
 import MyElements
 import Page exposing (Page)
+import RemoteData exposing (WebData)
 import Route exposing (Route)
 import Route.Path exposing (Path)
 import Shared
+import ToString
 import View exposing (View)
 
 
 page : Shared.Model -> Route () -> Page Model Msg
-page _ _ =
+page shared _ =
     Page.new
-        { init = init
+        { init = init shared
         , update = update
         , subscriptions = \_ -> Sub.none
         , view = view
@@ -23,19 +25,32 @@ page _ _ =
 
 
 type alias Model =
-    { greeting : Greeting }
+    { githubAccessToken : Maybe String
+    , greeting : WebData String
+    }
+
+
+init : Shared.Model -> () -> ( Model, Effect Msg )
+init shared _ =
+    let
+        model =
+            initModel shared
+    in
+    ( { model | greeting = RemoteData.Loading }
+    , Effect.sendCmd <| Api.Greeting.request ReceivedGreeting
+    )
+
+
+initModel : Shared.Model -> Model
+initModel shared =
+    { githubAccessToken = shared.githubAccessToken
+    , greeting = RemoteData.NotAsked
+    }
 
 
 type Msg
-    = ReceivedGreeting Greeting
+    = ReceivedGreeting (WebData String)
     | Navigate Path
-
-
-init : () -> ( Model, Effect Msg )
-init _ =
-    ( { greeting = Api.Greeting.Awaiting }
-    , Effect.sendCmd <| Api.Greeting.request ReceivedGreeting
-    )
 
 
 update : Msg -> Model -> ( Model, Effect Msg )
@@ -61,14 +76,17 @@ view model =
     }
 
 
-viewGreeting : Greeting -> Element msg
+viewGreeting : WebData String -> Element msg
 viewGreeting greeting =
     case greeting of
-        Api.Greeting.Awaiting ->
-            text "<wait...>"
+        RemoteData.Loading ->
+            text "<hang on...>"
 
-        Api.Greeting.Got message ->
+        RemoteData.Success message ->
             text message
 
-        Api.Greeting.Failure errMessage ->
-            text <| "<" ++ errMessage ++ ">"
+        RemoteData.Failure errMessage ->
+            text <| "<" ++ ToString.httpError errMessage ++ ">"
+
+        RemoteData.NotAsked ->
+            text <| ""

@@ -1,8 +1,6 @@
 // from https://www.w3schools.com/js/js_cookies.asp
 function getCookie(cname) {
-  console.log("getCookie");
   const nameWithEq = cname + "=";
-  console.log("raw cookie: " + document.cookie);
   const decodedCookie = decodeURIComponent(document.cookie);
   const ca = decodedCookie.split(";");
   for (let i = 0; i < ca.length; i++) {
@@ -11,11 +9,9 @@ function getCookie(cname) {
       c = c.substring(1);
     }
     if (c.indexOf(nameWithEq) == 0) {
-      console.log("getCookie return cookie");
       return c.substring(nameWithEq.length, c.length);
     }
   }
-  console.log("getCookie return nothing");
   return "";
 }
 
@@ -24,14 +20,10 @@ function getCookie(cname) {
 // The value returned here will be passed as flags
 // into your `Shared.init` function.
 export const flags = ({ _env }) => {
-  console.log("checking for cookie");
   const token = getCookie("github-access-token");
-  console.log("let's see...");
   if (token == "") {
-    console.log("no token cookie");
     return {};
   } else {
-    console.log("found token cookie " + token);
     return {
       githubAccessToken: token
     };
