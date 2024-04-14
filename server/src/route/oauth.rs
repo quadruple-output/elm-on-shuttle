@@ -1,13 +1,15 @@
-use ::axum::{
-    extract::Query,
-    response::{IntoResponse, Redirect, Response},
-    routing::get,
-    Json, Router,
-};
+use ::axum::body::Body;
+use ::axum::extract::Query;
+use ::axum::http::header;
+use ::axum::http::StatusCode;
+use ::axum::response::{IntoResponse, Response};
+use ::axum::routing::any;
+use ::axum::routing::get;
+use ::axum::Json;
+use ::axum::Router;
 use ::reqwest;
 use ::serde::{Deserialize, Serialize};
 use ::std::collections::HashMap;
-use axum::routing::any;
 
 const GITHUB_TOKEN_SERVICE: &str = "https://github.com/login/oauth/access_token";
 
@@ -48,14 +50,16 @@ struct GithubTokenResponseOk {
     access_token: String,
     /// The number of seconds until access_token expires. If you disabled expiration of user access
     /// tokens, this parameter will be omitted. The value will always be `28800` (8 hours).
-    expires_in: Option<u32>,
+    #[serde(rename = "expires_in")]
+    expires_in_seconds: Option<u32>,
     /// The refresh token. If you disabled expiration of user access tokens, this parameter will be
     /// omitted. The token starts with `ghr_`.
     refresh_token: Option<String>,
     /// The number of seconds until `refresh_token` expires. If you disabled expiration of user
     /// access tokens, this parameter will be omitted. The value will always be `15811200` (6
     /// months).
-    refresh_token_expires_in: Option<u32>,
+    #[serde(rename = "refresh_token_expires_in")]
+    refresh_token_expires_in_seconds: Option<u32>,
     /// The scopes that the token has. This value will always be an empty string. Unlike a
     /// traditional OAuth token, the user access token is limited to the permissions that both your
     /// app and the user have.
@@ -81,7 +85,7 @@ async fn github_callback(
     // Use the received code to request an access token from GitHub:
     let response = reqwest::Client::new()
         .post(GITHUB_TOKEN_SERVICE)
-        .header(reqwest::header::ACCEPT, mime::APPLICATION_JSON.as_ref())
+        .header(header::ACCEPT, mime::APPLICATION_JSON.as_ref())
         .json(&HashMap::from([
             ("client_id", "Iv1.b5ba4dcd32da9063"),
             ("client_secret", &app_client_secret),
@@ -97,8 +101,31 @@ async fn github_callback(
         token_response: Some(GithubTokenResponse::Ok(ok_response)),
     } = out
     {
-        let new_url = format!("/sign-in#{}", ok_response.access_token);
-        Redirect::to(&new_url).into_response()
+        let new_url = "/sign-in";
+        // Set-Cookie spec: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
+        let max_age = if let Some(expires_in_seconds) = ok_response.expires_in_seconds {
+            format!(
+                "Max-Age={}; ",
+                // Expire earlier than necessary to reduce the risk of token expiration during use
+                expires_in_seconds - 60 * 60
+            )
+        } else {
+            "".to_string()
+        };
+        // Setting a cookie with `StatusCode::FOUND` does not work. We use a `REFRESH` header
+        // instead.
+        Response::builder()
+            .status(StatusCode::OK)
+            .header(
+                header::SET_COOKIE,
+                format!(
+                    "github-access-token={access_token}; path=/; {max_age}SameSite=Strict",
+                    access_token = ok_response.access_token
+                ),
+            )
+            .header(header::REFRESH, format!("0;url={new_url}"))
+            .body(Body::empty())
+            .unwrap()
     } else {
         // Something went wrong. Just dump what we have.
         Json(out).into_response()

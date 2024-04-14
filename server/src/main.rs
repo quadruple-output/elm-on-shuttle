@@ -2,7 +2,9 @@ use ::axum::Router;
 use ::shuttle_axum::ShuttleAxum;
 use ::shuttle_runtime::{SecretStore as ShuttleSecretStore, Secrets as ShuttleSecrets};
 
-use self::route::{api, oauth, spa};
+use self::route::api;
+use self::route::oauth;
+use self::route::spa;
 
 mod route;
 mod secrets;

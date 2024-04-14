@@ -1,5 +1,5 @@
+use ::axum::routing::any;
 use ::axum::{routing::get, Router};
-use axum::routing::any;
 
 pub(crate) fn router() -> Router<()> {
     Router::new()

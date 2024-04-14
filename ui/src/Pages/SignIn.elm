@@ -6,8 +6,6 @@
 
 module Pages.SignIn exposing (Model, Msg, page)
 
-import Browser exposing (UrlRequest)
-import Dict
 import Effect exposing (Effect)
 import Element exposing (..)
 import Element.Background as Background
@@ -19,9 +17,7 @@ import Json.Decode exposing (Value)
 import Json.Encode
 import MyElements as My
 import Page exposing (Page)
-import Platform.Cmd as Cmd
 import Route exposing (Route)
-import Route.Path
 import Shared
 import Shared.Msg exposing (Msg(..))
 import ToString
@@ -30,9 +26,9 @@ import View exposing (View)
 
 
 page : Shared.Model -> Route () -> Page Model Msg
-page _ route =
+page shared route =
     Page.new
-        { init = init route.url
+        { init = init shared route.url
         , subscriptions = \_ -> Sub.none
         , update = update
         , view = view
@@ -41,34 +37,30 @@ page _ route =
 
 type alias Model =
     { myUrl : Url
-    , token : Maybe String
+    , githubAccessToken : Maybe String
     , state : Maybe String
     , msg : Maybe String
-    , replyType : String
     , reply : Maybe Value
     , receivedMsg : List Msg
     }
 
 
 type Msg
-    = OnUrlRequest UrlRequest
-    | OnUrlChange Url
-    | Login
+    = Login
     | GetUser
     | ReceiveUser (Result Http.Error Value)
 
 
-init : Url -> () -> ( Model, Effect Msg )
-init url _ =
+init : Shared.Model -> Url -> () -> ( Model, Effect Msg )
+init shared url _ =
     ( { myUrl = url
-      , token = url.fragment
+      , githubAccessToken = shared.githubAccessToken
       , state = Nothing
       , msg = Nothing
-      , replyType = "Token"
       , reply = Nothing
       , receivedMsg = []
       }
-    , Effect.replaceRoute { path = Route.Path.SignIn, query = Dict.empty, hash = Nothing }
+    , Effect.none
     )
 
 
@@ -79,17 +71,11 @@ update msg m =
             { m | receivedMsg = m.receivedMsg ++ [ msg ] }
     in
     case msg of
-        OnUrlRequest _ ->
-            ( model, Effect.none )
-
-        OnUrlChange _ ->
-            ( model, Effect.none )
-
         Login ->
             ( model, Effect.loadExternalUrl <| GitHub.oAuthLoginUrl model.myUrl )
 
         GetUser ->
-            case model.token of
+            case model.githubAccessToken of
                 Just token ->
                     ( model, Effect.sendCmd <| GitHub.getUser token ReceiveUser )
 
@@ -107,8 +93,7 @@ update msg m =
 
                 Ok reply ->
                     ( { model
-                        | replyType = "API Response"
-                        , reply = Just reply
+                        | reply = Just reply
                         , msg =
                             Just <|
                                 "Hello "
@@ -174,7 +159,7 @@ viewLastErrorOrResponse model =
                     [ el [ Background.color (rgb 0 0 1), Font.color (rgb 1 1 0) ] <|
                         text "Reply:"
                     , el [ Font.color (rgb 0 0 1) ] <|
-                        text (model.replyType ++ ":\n" ++ Json.Encode.encode 2 reply)
+                        text (Json.Encode.encode 2 reply)
                     ]
             ]
 
@@ -191,12 +176,6 @@ msgToString msg =
     case msg of
         Login ->
             "Login"
-
-        OnUrlRequest _ ->
-            "OnUrlRequest _"
-
-        OnUrlChange _ ->
-            "OnUrlChange _"
 
         GetUser ->
             "GetUser"
