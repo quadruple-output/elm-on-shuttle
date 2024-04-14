@@ -12,11 +12,10 @@ import Element.Background as Background
 import Element.Font as Font
 import Element.Region exposing (heading)
 import GitHub
-import Http
 import Json.Decode exposing (Value)
-import Json.Encode
 import MyElements as My
 import Page exposing (Page)
+import RemoteData exposing (WebData)
 import Route exposing (Route)
 import Shared
 import Shared.Msg exposing (Msg(..))
@@ -38,30 +37,31 @@ page shared route =
 type alias Model =
     { myUrl : Url
     , githubAccessToken : Maybe String
-    , state : Maybe String
-    , msg : Maybe String
-    , reply : Maybe Value
+    , message : Maybe String
     , receivedMsg : List Msg
+    }
+
+
+init : Shared.Model -> Url -> () -> ( Model, Effect Msg )
+init shared url _ =
+    ( initModel shared.githubAccessToken url
+    , Effect.none
+    )
+
+
+initModel : Maybe String -> Url -> Model
+initModel token url =
+    { myUrl = url
+    , githubAccessToken = token
+    , message = Nothing
+    , receivedMsg = []
     }
 
 
 type Msg
     = Login
     | GetUser
-    | ReceiveUser (Result Http.Error Value)
-
-
-init : Shared.Model -> Url -> () -> ( Model, Effect Msg )
-init shared url _ =
-    ( { myUrl = url
-      , githubAccessToken = shared.githubAccessToken
-      , state = Nothing
-      , msg = Nothing
-      , reply = Nothing
-      , receivedMsg = []
-      }
-    , Effect.none
-    )
+    | ReceiveUser (WebData Value)
 
 
 update : Msg -> Model -> ( Model, Effect Msg )
@@ -75,36 +75,51 @@ update msg m =
             ( model, Effect.loadExternalUrl <| GitHub.oAuthLoginUrl model.myUrl )
 
         GetUser ->
-            case model.githubAccessToken of
-                Just token ->
-                    ( model, Effect.sendCmd <| GitHub.getUser token ReceiveUser )
-
-                Nothing ->
-                    ( { model | msg = Just "You must login before getting user information." }
-                    , Effect.none
-                    )
+            updateRequestUser model
 
         ReceiveUser result ->
-            case result of
-                Err err ->
-                    ( { model | reply = Nothing, msg = Just <| ToString.httpError err }
-                    , Effect.none
-                    )
+            updateReceiveUser model result
 
-                Ok reply ->
-                    ( { model
-                        | reply = Just reply
-                        , msg =
-                            Just <|
-                                "Hello "
-                                    ++ (Result.withDefault "unknown Person" <|
-                                            Json.Decode.decodeValue
-                                                (Json.Decode.field "name" Json.Decode.string)
-                                                reply
-                                       )
-                      }
-                    , Effect.none
-                    )
+
+updateRequestUser : Model -> ( Model, Effect Msg )
+updateRequestUser model =
+    case model.githubAccessToken of
+        Just token ->
+            ( model, Effect.sendCmd <| GitHub.getUser token ReceiveUser )
+
+        Nothing ->
+            ( { model | message = Just "You must login before requesting user data." }
+            , Effect.none
+            )
+
+
+updateReceiveUser : Model -> WebData Value -> ( Model, Effect Msg )
+updateReceiveUser model webdata =
+    case webdata of
+        RemoteData.Loading ->
+            Debug.todo ""
+
+        RemoteData.Failure err ->
+            ( { model | message = Just <| ToString.httpError err }
+            , Effect.none
+            )
+
+        RemoteData.Success jsonValue ->
+            ( { model
+                | message =
+                    Just <|
+                        "Hello "
+                            ++ (Result.withDefault "unknown Person" <|
+                                    Json.Decode.decodeValue
+                                        (Json.Decode.field "name" Json.Decode.string)
+                                        jsonValue
+                               )
+              }
+            , Effect.none
+            )
+
+        RemoteData.NotAsked ->
+            ( model, Effect.none )
 
 
 view : Model -> View Msg
@@ -114,8 +129,7 @@ view model =
     , element =
         column [ width fill ] <|
             viewMain
-                :: viewLastErrorOrResponse model
-                ++ [ viewMessageLog model ]
+                :: viewMessage model
     }
 
 
@@ -123,69 +137,25 @@ viewMain : Element Msg
 viewMain =
     column [ centerX ]
         [ el [ heading 1, Font.heavy ] <| text "OAuth Login Page"
-        , paragraph [] [ text "Authorization Provider is GitHub" ]
         , column [ centerX ]
-            [ My.button [ centerX ] "Login" Login
+            [ My.button [ centerX ] "Login with GitHub" Login
             , My.button [ centerX ] "Get User" GetUser
             ]
         ]
 
 
-viewMessageLog : Model -> Element msg
-viewMessageLog model =
-    column [ paddingEach { top = 10, right = 0, bottom = 0, left = 0 } ] <|
-        text "--- Message Log: ---"
-            :: List.map
-                (\msg -> Element.paragraph [] [ text <| msgToString msg ])
-                model.receivedMsg
-
-
-viewLastErrorOrResponse : Model -> List (Element msg)
-viewLastErrorOrResponse model =
-    case ( model.msg, model.reply ) of
-        ( Just msg, _ ) ->
+viewMessage : Model -> List (Element msg)
+viewMessage model =
+    case model.message of
+        Just msg ->
             [ el [ paddingEach { top = 10, right = 0, bottom = 0, left = 0 } ] <|
                 Element.paragraph [] <|
                     [ el [ Background.color (rgb 1 0 0), Font.color (rgb 1 1 0) ] <|
-                        text "Error:"
+                        text "Info:"
                     , el [ Font.color (rgb 1 0 0) ] <|
                         text (" " ++ msg)
                     ]
             ]
 
-        ( Nothing, Just reply ) ->
-            [ el [ paddingEach { top = 10, right = 0, bottom = 0, left = 0 } ] <|
-                Element.paragraph [] <|
-                    [ el [ Background.color (rgb 0 0 1), Font.color (rgb 1 1 0) ] <|
-                        text "Reply:"
-                    , el [ Font.color (rgb 0 0 1) ] <|
-                        text (Json.Encode.encode 2 reply)
-                    ]
-            ]
-
-        ( Nothing, Nothing ) ->
+        Nothing ->
             []
-
-
-
--- helpers --
-
-
-msgToString : Msg -> String
-msgToString msg =
-    case msg of
-        Login ->
-            "Login"
-
-        GetUser ->
-            "GetUser"
-
-        ReceiveUser user_result ->
-            "ReceiveUser "
-                ++ (case user_result of
-                        Ok user ->
-                            "Ok " ++ Json.Encode.encode 0 user
-
-                        Err err ->
-                            "Error " ++ ToString.httpError err
-                   )
