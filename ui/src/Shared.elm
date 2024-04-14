@@ -13,7 +13,9 @@ module Shared exposing
 -}
 
 import Effect exposing (Effect)
+import GitHub
 import Json.Decode
+import RemoteData
 import Route exposing (Route)
 import Shared.Model
 import Shared.Msg
@@ -53,14 +55,30 @@ init flagsResult _ =
 
                 Err _ ->
                     -- let
-                    --     _ =
-                    --         Debug.log "Error decoding flags" (Json.Decode.errorToString err)
+                    --     _ = Debug.log "Error decoding flags" (Json.Decode.errorToString err)
                     -- in
                     { githubAccessToken = Nothing }
+
+        ( model, effect ) =
+            case flags.githubAccessToken of
+                Just token ->
+                    ( { initModel | user = RemoteData.Loading }
+                    , Effect.sendCmd (GitHub.getUser token Shared.Msg.GotUser)
+                    )
+
+                Nothing ->
+                    ( initModel, Effect.none )
     in
-    ( { githubAccessToken = flags.githubAccessToken }
-    , Effect.none
+    ( { model | githubAccessToken = flags.githubAccessToken }
+    , effect
     )
+
+
+initModel : Model
+initModel =
+    { githubAccessToken = Nothing
+    , user = RemoteData.NotAsked
+    }
 
 
 
@@ -74,10 +92,8 @@ type alias Msg =
 update : Route () -> Msg -> Model -> ( Model, Effect Msg )
 update _ msg model =
     case msg of
-        Shared.Msg.ExampleMsgReplaceMe ->
-            ( model
-            , Effect.none
-            )
+        Shared.Msg.GotUser webUserData ->
+            ( { model | user = webUserData }, Effect.none )
 
 
 

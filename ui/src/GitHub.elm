@@ -1,10 +1,11 @@
 module GitHub exposing (getUser, oAuthLoginUrl)
 
 import Http
-import Json.Decode
+import Json.Decode as Decode exposing (Decoder)
 import RemoteData exposing (WebData)
 import Url exposing (Protocol(..), Url)
 import Url.Builder exposing (string)
+import User exposing (UserData)
 
 
 oAuthLoginUrl : Url -> String
@@ -16,8 +17,8 @@ oAuthLoginUrl myUrl =
         ]
 
 
-getUser : String -> (WebData Json.Decode.Value -> msg) -> Cmd msg
-getUser token msg =
+getUser : String -> (WebData UserData -> msg) -> Cmd msg
+getUser token webDataToMsg =
     Http.request
         { method = "GET"
         , headers =
@@ -27,10 +28,17 @@ getUser token msg =
             ]
         , url = Url.Builder.crossOrigin apiPrePath [ "user" ] []
         , body = Http.emptyBody
-        , expect = Http.expectJson (RemoteData.fromResult >> msg) Json.Decode.value
+        , expect = Http.expectJson (RemoteData.fromResult >> webDataToMsg) decodeUserData
         , timeout = Nothing
         , tracker = Nothing
         }
+
+
+decodeUserData : Decoder UserData
+decodeUserData =
+    Decode.map
+        UserData
+        (Decode.field "name" Decode.string)
 
 
 

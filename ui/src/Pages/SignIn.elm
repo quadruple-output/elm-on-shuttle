@@ -12,7 +12,6 @@ import Element.Background as Background
 import Element.Font as Font
 import Element.Region exposing (heading)
 import GitHub
-import Json.Decode exposing (Value)
 import MyElements as My
 import Page exposing (Page)
 import RemoteData exposing (WebData)
@@ -21,6 +20,7 @@ import Shared
 import Shared.Msg exposing (Msg(..))
 import ToString
 import Url exposing (Url)
+import User exposing (UserData)
 import View exposing (View)
 
 
@@ -37,6 +37,7 @@ page shared route =
 type alias Model =
     { myUrl : Url
     , githubAccessToken : Maybe String
+    , user : WebData UserData
     , message : Maybe String
     , receivedMsg : List Msg
     }
@@ -44,15 +45,16 @@ type alias Model =
 
 init : Shared.Model -> Url -> () -> ( Model, Effect Msg )
 init shared url _ =
-    ( initModel shared.githubAccessToken url
+    ( initModel shared url
     , Effect.none
     )
 
 
-initModel : Maybe String -> Url -> Model
-initModel token url =
+initModel : Shared.Model -> Url -> Model
+initModel shared url =
     { myUrl = url
-    , githubAccessToken = token
+    , githubAccessToken = shared.githubAccessToken
+    , user = shared.user
     , message = Nothing
     , receivedMsg = []
     }
@@ -61,7 +63,7 @@ initModel token url =
 type Msg
     = Login
     | GetUser
-    | ReceiveUser (WebData Value)
+    | ReceiveUser (WebData UserData)
 
 
 update : Msg -> Model -> ( Model, Effect Msg )
@@ -93,7 +95,7 @@ updateRequestUser model =
             )
 
 
-updateReceiveUser : Model -> WebData Value -> ( Model, Effect Msg )
+updateReceiveUser : Model -> WebData UserData -> ( Model, Effect Msg )
 updateReceiveUser model webdata =
     case webdata of
         RemoteData.Loading ->
@@ -104,17 +106,8 @@ updateReceiveUser model webdata =
             , Effect.none
             )
 
-        RemoteData.Success jsonValue ->
-            ( { model
-                | message =
-                    Just <|
-                        "Hello "
-                            ++ (Result.withDefault "unknown Person" <|
-                                    Json.Decode.decodeValue
-                                        (Json.Decode.field "name" Json.Decode.string)
-                                        jsonValue
-                               )
-              }
+        RemoteData.Success user ->
+            ( { model | message = Just <| "Hello " ++ user.name }
             , Effect.none
             )
 

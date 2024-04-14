@@ -20,7 +20,7 @@ page shared _ =
         { init = init shared
         , update = update
         , subscriptions = \_ -> Sub.none
-        , view = view
+        , view = view shared
         }
 
 
@@ -63,17 +63,44 @@ update msg model =
             ( model, Effect.pushRoute { path = path, query = Dict.empty, hash = Nothing } )
 
 
-view : Model -> View Msg
-view model =
+view : Shared.Model -> Model -> View Msg
+view shared model =
     { title = "Elm on Shuttle"
     , attributes = []
     , element =
         el [ centerX, centerY ] <|
-            column []
+            column [ spacing 20 ]
                 [ viewGreeting model.greeting
-                , MyElements.button [ centerX ] "Sign-In" (Navigate Route.Path.SignIn)
+                , viewSignInStatus shared
                 ]
     }
+
+
+viewSignInStatus : Shared.Model -> Element Msg
+viewSignInStatus shared =
+    case shared.user of
+        RemoteData.Loading ->
+            text "<checking login status...>"
+
+        RemoteData.Success user ->
+            text <| "Logged in as " ++ user.name
+
+        RemoteData.Failure errMessage ->
+            column []
+                [ text <| "Error getting user data: " ++ ToString.httpError errMessage
+                , viewSignInButton
+                ]
+
+        RemoteData.NotAsked ->
+            column []
+                [ text "not logged in"
+                , viewSignInButton
+                ]
+
+
+viewSignInButton : Element Msg
+viewSignInButton =
+    MyElements.button [ centerX ] "Sign-In" (Navigate Route.Path.SignIn)
 
 
 viewGreeting : WebData String -> Element msg

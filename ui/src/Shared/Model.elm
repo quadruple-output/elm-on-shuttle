@@ -1,6 +1,7 @@
 module Shared.Model exposing (Model)
 
-{-| -}
+import RemoteData exposing (WebData)
+import User exposing (UserData)
 
 
 {-| Normally, this value would live in "Shared.elm"
@@ -12,4 +13,5 @@ own file, so they can be imported by `Effect.elm`
 -}
 type alias Model =
     { githubAccessToken : Maybe String
+    , user : WebData UserData
     }
