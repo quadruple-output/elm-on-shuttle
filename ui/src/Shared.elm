@@ -15,10 +15,11 @@ module Shared exposing
 import Effect exposing (Effect)
 import GitHub
 import Json.Decode
-import RemoteData
+import RemoteData exposing (RemoteData(..), WebData)
 import Route exposing (Route)
 import Shared.Model
 import Shared.Msg
+import User exposing (UserData)
 
 
 
@@ -48,6 +49,9 @@ type alias Model =
 init : Result Json.Decode.Error Flags -> Route () -> ( Model, Effect Msg )
 init flagsResult _ =
     let
+        model =
+            initModel
+
         flags =
             case flagsResult of
                 Ok f ->
@@ -59,15 +63,13 @@ init flagsResult _ =
                     -- in
                     { githubAccessToken = Nothing }
 
-        ( model, effect ) =
+        effect =
             case flags.githubAccessToken of
                 Just token ->
-                    ( { initModel | user = RemoteData.Loading }
-                    , Effect.sendCmd (GitHub.getUser token Shared.Msg.GotUser)
-                    )
+                    Effect.sendCmd (GitHub.getUser token Shared.Msg.GotUser)
 
                 Nothing ->
-                    ( initModel, Effect.none )
+                    Effect.none
     in
     ( { model | githubAccessToken = flags.githubAccessToken }
     , effect
@@ -77,7 +79,7 @@ init flagsResult _ =
 initModel : Model
 initModel =
     { githubAccessToken = Nothing
-    , user = RemoteData.NotAsked
+    , user = NotAsked
     }
 
 
@@ -93,7 +95,14 @@ update : Route () -> Msg -> Model -> ( Model, Effect Msg )
 update _ msg model =
     case msg of
         Shared.Msg.GotUser webUserData ->
-            ( { model | user = webUserData }, Effect.none )
+            processGotUser webUserData model
+
+
+processGotUser : WebData UserData -> Model -> ( Model, Effect Msg )
+processGotUser webdata model =
+    ( model
+    , Effect.none
+    )
 
 
 
